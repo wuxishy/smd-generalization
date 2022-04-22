@@ -82,6 +82,8 @@ class SMD_qnorm(Optimizer):
             weight_decay = group['weight_decay']
             momentum = group['momentum']
             dampening = group['dampening']
+            lr = group['lr']
+            q = group['q']
             
 #             all_grads = []
 
@@ -90,8 +92,8 @@ class SMD_qnorm(Optimizer):
                     continue
                 d_p = p.grad.data
     #           q norm potential function
-                update = (group['q'])* (torch.abs(p.data)**(group['q']-1)) * torch.sign(p.data) - group['lr'] * d_p
-                p.data = (torch.abs(update/(group['q']))**(1/(group['q'] - 1))) * torch.sign(update)
+                update = q * (torch.abs(p.data)**(q-1)) * torch.sign(p.data) - lr * d_p
+                p.data = (torch.abs(update/q)**(1/(q - 1))) * torch.sign(update)
 
         return loss 
     
