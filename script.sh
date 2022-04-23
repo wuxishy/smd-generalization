@@ -1,9 +1,8 @@
 #!/bin/bash
 
-#SBATCH --gres=gpu:volta:1
-
-#Run the script
-module load anaconda
+# Loading the required module
+source /etc/profile
+module load anaconda/2021a
 
 mkdir -p output
 python3 cifar_resnet.py 0.0  | tee output/outputSGD.txt
