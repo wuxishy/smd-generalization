@@ -1,0 +1,16 @@
+data:
+  gpu: 0
+  num_workers: 8
+  train_dataset: cifar_train.beton
+  val_dataset: cifar_test.beton
+training:
+  arch: mobilenet
+  batch_size: 128
+  epochs: 400
+  lr: 0.3
+  momentum: 0.9
+  lr_peak_epoch: 20
+  weight_decay: 0 
+  label_smoothing: 0.0
+  lr_tta: false
+  num_workers: 8
