@@ -35,7 +35,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
 num_epochs = 20
-learning_rate = 0.001
+# learning_rate = 0.001
+learning_rate = 0.002
 batch_size = 128
 q = 2
 
@@ -207,7 +208,7 @@ for epoch in range(num_epochs):
         curr_lr /= 3
         update_lr(optimizer, curr_lr)
         # torch.save(model.state_dict(), f'output/resnet_{epoch+1}_{m}.pt')
-        torch.save(model.state_dict(), f'output/resnet_smd_{epoch+1}_{m}.pt')
+        torch.save(model.state_dict(), f'output/resnet_smd_lrx2_{epoch+1}_{m}.pt')
 
 print("Starting validation")
 # Test the model
@@ -229,4 +230,4 @@ print("Total time:", time.time() - start_time, "sec")
 
 # Save the model checkpoint
 # torch.save(model, f'output/resnet_sgd_{m}.pth')
-torch.save(model, f'output/resnet_smd_{m}.pth')
+torch.save(model, f'output/resnet_smd_lrx2_{m}.pth')
