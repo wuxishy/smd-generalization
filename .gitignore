@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Large files (models, data)
+*.pt
+*.pth
+data/
+script.sh.log*
