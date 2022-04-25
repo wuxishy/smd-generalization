@@ -165,7 +165,8 @@ criterion = nn.CrossEntropyLoss()
 #optimizer = SMD_opt.SMD_qnorm(model.parameters(), lr=learning_rate, q=q)
 
 m = float(argv[1])
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum = m)
+# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum = m)
+optimizer = SMD_opt.SMD_qnorm(model.parameters(), lr=learning_rate, q=q, momentum=m)
 
 # For updating learning rate
 def update_lr(optimizer, lr):    
@@ -205,7 +206,8 @@ for epoch in range(num_epochs):
     if (epoch+1) % 20 == 0:
         curr_lr /= 3
         update_lr(optimizer, curr_lr)
-        torch.save(model.state_dict(), f'output/resnet_{epoch+1}_{m}.pt')
+        # torch.save(model.state_dict(), f'output/resnet_{epoch+1}_{m}.pt')
+        torch.save(model.state_dict(), f'output/resnet_smd_{epoch+1}_{m}.pt')
 
 print("Starting validation")
 # Test the model
@@ -226,4 +228,5 @@ with torch.no_grad():
 print("Total time:", time.time() - start_time, "sec")
 
 # Save the model checkpoint
-torch.save(model, f'output/resnet_sgd_{m}.pth')
+# torch.save(model, f'output/resnet_sgd_{m}.pth')
+torch.save(model, f'output/resnet_smd_{m}.pth')

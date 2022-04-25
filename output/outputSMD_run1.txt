@@ -1,0 +1,89 @@
+Data loaded: 1.1204376220703125 sec
+Starting training
+In Epoch:  0
+Epoch [1/20], Step [128/391] Loss: 2.3001
+Epoch [1/20], Step [256/391] Loss: 2.2778
+Epoch [1/20], Step [384/391] Loss: 2.2152
+In Epoch:  1
+Epoch [2/20], Step [128/391] Loss: 2.1788
+Epoch [2/20], Step [256/391] Loss: 2.0998
+Epoch [2/20], Step [384/391] Loss: 2.1124
+In Epoch:  2
+Epoch [3/20], Step [128/391] Loss: 2.0852
+Epoch [3/20], Step [256/391] Loss: 2.0203
+Epoch [3/20], Step [384/391] Loss: 2.0509
+In Epoch:  3
+Epoch [4/20], Step [128/391] Loss: 2.0576
+Epoch [4/20], Step [256/391] Loss: 2.0719
+Epoch [4/20], Step [384/391] Loss: 2.0838
+In Epoch:  4
+Epoch [5/20], Step [128/391] Loss: 1.9685
+Epoch [5/20], Step [256/391] Loss: 1.9535
+Epoch [5/20], Step [384/391] Loss: 1.9766
+In Epoch:  5
+Epoch [6/20], Step [128/391] Loss: 1.9935
+Epoch [6/20], Step [256/391] Loss: 1.9643
+Epoch [6/20], Step [384/391] Loss: 2.0065
+In Epoch:  6
+Epoch [7/20], Step [128/391] Loss: 1.9384
+Epoch [7/20], Step [256/391] Loss: 1.9037
+Epoch [7/20], Step [384/391] Loss: 1.9166
+In Epoch:  7
+Epoch [8/20], Step [128/391] Loss: 1.9127
+Epoch [8/20], Step [256/391] Loss: 1.8449
+Epoch [8/20], Step [384/391] Loss: 1.9804
+In Epoch:  8
+Epoch [9/20], Step [128/391] Loss: 1.9347
+Epoch [9/20], Step [256/391] Loss: 1.8295
+Epoch [9/20], Step [384/391] Loss: 1.9397
+In Epoch:  9
+Epoch [10/20], Step [128/391] Loss: 1.8382
+Epoch [10/20], Step [256/391] Loss: 1.8738
+Epoch [10/20], Step [384/391] Loss: 1.8993
+10 epoch training time: 176.1576554775238 sec
+
+In Epoch:  10
+Epoch [11/20], Step [128/391] Loss: 1.8148
+Epoch [11/20], Step [256/391] Loss: 1.8588
+Epoch [11/20], Step [384/391] Loss: 1.9053
+In Epoch:  11
+Epoch [12/20], Step [128/391] Loss: 1.9718
+Epoch [12/20], Step [256/391] Loss: 1.8689
+Epoch [12/20], Step [384/391] Loss: 1.8215
+In Epoch:  12
+Epoch [13/20], Step [128/391] Loss: 1.8815
+Epoch [13/20], Step [256/391] Loss: 1.8509
+Epoch [13/20], Step [384/391] Loss: 1.7955
+In Epoch:  13
+Epoch [14/20], Step [128/391] Loss: 1.8624
+Epoch [14/20], Step [256/391] Loss: 1.7111
+Epoch [14/20], Step [384/391] Loss: 1.7777
+In Epoch:  14
+Epoch [15/20], Step [128/391] Loss: 1.8129
+Epoch [15/20], Step [256/391] Loss: 1.7342
+Epoch [15/20], Step [384/391] Loss: 1.9197
+In Epoch:  15
+Epoch [16/20], Step [128/391] Loss: 1.7893
+Epoch [16/20], Step [256/391] Loss: 1.7976
+Epoch [16/20], Step [384/391] Loss: 1.7950
+In Epoch:  16
+Epoch [17/20], Step [128/391] Loss: 1.8051
+Epoch [17/20], Step [256/391] Loss: 1.8314
+Epoch [17/20], Step [384/391] Loss: 1.8579
+In Epoch:  17
+Epoch [18/20], Step [128/391] Loss: 1.8024
+Epoch [18/20], Step [256/391] Loss: 1.7811
+Epoch [18/20], Step [384/391] Loss: 1.8137
+In Epoch:  18
+Epoch [19/20], Step [128/391] Loss: 1.7759
+Epoch [19/20], Step [256/391] Loss: 1.7173
+Epoch [19/20], Step [384/391] Loss: 1.7091
+In Epoch:  19
+Epoch [20/20], Step [128/391] Loss: 1.6943
+Epoch [20/20], Step [256/391] Loss: 1.7424
+Epoch [20/20], Step [384/391] Loss: 1.7751
+10 epoch training time: 177.44504833221436 sec
+
+Starting validation
+Accuracy of the model on the test images: 38.28 %
+Total time: 358.8030958175659 sec
