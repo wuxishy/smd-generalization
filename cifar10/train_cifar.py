@@ -63,26 +63,28 @@ Section('training', 'Hyperparameters').params(
 
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training', required=True),
-    val_dataset=Param(str, '.dat file to use for validation', required=True),
+    val_dataset=Param(str, '.dat file to use for validation (during training)', required=True),
+    test_dataset=Param(str, '.dat file to use for evaluation', required=True)
 )
 
 @param('data.train_dataset')
 @param('data.val_dataset')
+@param('data.test_dataset')
 @param('training.batch_size')
 @param('training.num_workers')
-def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_workers=None):
+def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None, batch_size=None, num_workers=None):
     paths = {
         'train': train_dataset,
-        'test': val_dataset
-
-    }
+        'val': val_dataset,
+        'test': test_dataset
+    }   
 
     start_time = time.time()
     CIFAR_MEAN = [125.307, 122.961, 113.8575]
     CIFAR_STD = [51.5865, 50.847, 51.255]
     loaders = {}
 
-    for name in ['train', 'test']:
+    for name in ['train', 'val', 'test']:
         label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice('cuda:0'), Squeeze()]
         image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
         if name == 'train':
@@ -146,9 +148,11 @@ def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
     #scheduler = lr_scheduler.CyclicLR(opt, lr*1e-3, lr, cycle_momentum=False) 
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
+    best_acc = 0
+    best_model = None
 
-    for _ in tqdm(range(epochs)):
-        for ims, labs in loaders['train']:
+    for epoch in tqdm(range(epochs)):
+        for i, (ims, labs) in enumerate(loaders['train']):
             opt.zero_grad(set_to_none=True)
             with autocast():
                 out = model(ims)
@@ -157,13 +161,36 @@ def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
+
         scheduler.step()
+
+        # save intermediate models, see if this is the best model so far
+        if (epoch + 1) % 20 == 0:
+            torch.save(model.state_dict(), f'output/resnet_{epoch+1}_{m}.pt')
+            
+            total_correct, total_num = 0., 0.
+            for ims, labs in loaders['val']:
+                with autocast():
+                    out = model(ims)
+                    total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
+                    total_num += ims.shape[0]
+            print(f'validation accuracy: {total_correct / total_num * 100:.2f}%')
+
+            acc = total_current / total_num
+            if acc > best_acc:
+                best_acc = acc
+                best_model = model
+                print(f'best accuracy: {acc * 100:.2f}%')
+                torch.save(model.state_dict(), f'output/best_resnet.pt')
+    
+    # return the best trained model 
+    model = best_model
 
 @param('training.lr_tta')
 def evaluate(model, loaders, lr_tta=False):
     model.eval()
     with ch.no_grad():
-        for name in ['train', 'test']:
+        for name in ['train', 'val', 'test']:
             total_correct, total_num = 0., 0.
             for ims, labs in tqdm(loaders[name]):
                 with autocast():
@@ -188,3 +215,4 @@ if __name__ == "__main__":
     train(model, loaders)
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
     evaluate(model, loaders)
+    torch.save(model, 'output/resnet_sgd.pth')
