@@ -23,6 +23,7 @@ from argparse import ArgumentParser
 from typing import List
 import time
 import numpy as np
+import yaml
 from tqdm import tqdm
 
 from models import *
@@ -51,6 +52,7 @@ from ffcv.writer import DatasetWriter
 
 Section('training', 'Hyperparameters').params(
     arch=Param(str, 'CNN architecture to use', required=True),
+    q=Param(int, 'q-value to use in SMD', required=True)
     lr=Param(float, 'The learning rate to use', required=True),
     epochs=Param(int, 'Number of epochs to run for', required=True),
     lr_peak_epoch=Param(int, 'Peak epoch for cyclic lr', required=True),
@@ -64,7 +66,8 @@ Section('training', 'Hyperparameters').params(
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training', required=True),
     val_dataset=Param(str, '.dat file to use for validation (during training)', required=True),
-    test_dataset=Param(str, '.dat file to use for evaluation', required=True)
+    test_dataset=Param(str, '.dat file to use for evaluation', required=True),
+    output_directory=Param(str, 'directory to save outputs (model, accuracy yaml) in', required=True)
 )
 
 @param('data.train_dataset')
@@ -123,16 +126,18 @@ def construct_model(arch):
     return model
 
 @param('training.lr')
+@param('training.q')
 @param('training.epochs')
 @param('training.momentum')
 @param('training.weight_decay')
 @param('training.label_smoothing')
 @param('training.lr_peak_epoch')
-def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
-          momentum=None, weight_decay=None, lr_peak_epoch=None):
+@param('data.output_directory')
+def train(model, loaders, lr=None, q=None, epochs=None, label_smoothing=None,
+          momentum=None, weight_decay=None, lr_peak_epoch=None, output_directory=None):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
-    opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=2)
+    opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=q)
     iters_per_epoch = len(loaders['train'])
     # Cyclic LR with single triangle
     '''
@@ -164,31 +169,23 @@ def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
 
         scheduler.step()
 
-        # save intermediate models, see if this is the best model so far
-        if (epoch + 1) % 20 == 0:
-            torch.save(model.state_dict(), f'output/resnet_{epoch+1}_{m}.pt')
-            
-            total_correct, total_num = 0., 0.
-            for ims, labs in loaders['val']:
-                with autocast():
-                    out = model(ims)
-                    total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
-                    total_num += ims.shape[0]
-            print(f'validation accuracy: {total_correct / total_num * 100:.2f}%')
+        if (epoch + 1) % 10 == 0:  
+            val_acc = validation(model, loaders)
+            model.train()   # return to training
 
-            acc = total_current / total_num
-            if acc > best_acc:
-                best_acc = acc
+            if val_acc > best_acc:
+                best_acc = val_acc
                 best_model = model
-                print(f'best accuracy: {acc * 100:.2f}%')
-                torch.save(model.state_dict(), f'output/best_resnet.pt')
+                print(f'best accuracy so far: {val_acc * 100:.2f}%')
+                torch.save(model.state_dict(), f'{output_directory}/model.pt')
     
-    # return the best trained model 
+    # return best model 
     model = best_model
 
 @param('training.lr_tta')
 def evaluate(model, loaders, lr_tta=False):
     model.eval()
+    accuracies = {}
     with ch.no_grad():
         for name in ['train', 'val', 'test']:
             total_correct, total_num = 0., 0.
@@ -199,7 +196,23 @@ def evaluate(model, loaders, lr_tta=False):
                         out += model(ims.flip(-1))
                     total_correct += out.argmax(1).eq(labs).sum().cpu().item()
                     total_num += ims.shape[0]
+            accuracies[name] = total_correct / total_num
             print(f'{name} accuracy: {total_correct / total_num * 100:.2f}%')
+    
+    return accuracies
+
+def validation(model, loaders):
+    model.eval()
+    # see if this is the best model so far         
+    total_correct, total_num = 0., 0.
+    for ims, labs in loaders['val']:
+        with autocast():
+            out = model(ims)
+            total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
+            total_num += ims.shape[0]
+    print(f'validation accuracy: {total_correct / total_num * 100:.2f}%')
+
+    return total_correct / total_num
 
 if __name__ == "__main__":
     config = get_current_config()
@@ -214,5 +227,8 @@ if __name__ == "__main__":
     model = construct_model()
     train(model, loaders)
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
-    evaluate(model, loaders)
-    torch.save(model, 'output/resnet_sgd.pth')
+    accuracies = evaluate(model, loaders)
+
+    acc_file = f'{output_directory}/accuracy.yaml'
+    with open(acc_file, 'w') as file:
+        yaml.dump(accuracies, file)

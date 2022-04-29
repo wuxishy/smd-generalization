@@ -1,8 +1,8 @@
 #!/bin/bash
 
 module load anaconda/2022a
-source activate ffcv2
-alias python=$HOME/.conda/envs/ffcv2/bin/python
+source activate ffcv
+alias python=$HOME/.conda/envs/ffcv/bin/python
 
 cp *.beton $TMPDIR/
 
