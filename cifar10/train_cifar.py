@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     loaders, start_time = make_dataloaders()
     model = construct_model()
-    with log_file = open(f'{output_directory}/log.txt', 'w'):
+    with open(f'{output_directory}/log.txt', 'w') as log_file:
         train(model, loaders, log_file)
 
     accuracies = evaluate(model, loaders)
