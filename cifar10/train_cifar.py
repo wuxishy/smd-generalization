@@ -25,6 +25,7 @@ import time
 import numpy as np
 import yaml
 from tqdm import tqdm
+import sys, os, os.path
 
 from models import *
 
@@ -52,22 +53,20 @@ from ffcv.writer import DatasetWriter
 
 Section('training', 'Hyperparameters').params(
     arch=Param(str, 'CNN architecture to use', required=True),
-    q=Param(int, 'q-value to use in SMD', required=True)
-    lr=Param(float, 'The learning rate to use', required=True),
+    pnorm=Param(int, 'p-value to use in SMD', required=True)
+    lr_init=Param(float, 'The initial learning rate to use', required=True),
+    lr=Param(float, 'The maximum learning rate to use', required=True),
     epochs=Param(int, 'Number of epochs to run for', required=True),
     lr_peak_epoch=Param(int, 'Peak epoch for cyclic lr', required=True),
-    batch_size=Param(int, 'Batch size', default=512),
-    momentum=Param(float, 'Momentum for SGD', default=0.0),
-    weight_decay=Param(float, 'l2 weight decay', default=0.0),
-    label_smoothing=Param(float, 'Value of label smoothing', default=0.0),
+    batch_size=Param(int, 'Batch size', default=128),
     num_workers=Param(int, 'The number of workers', default=8),
 )
 
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training', required=True),
-    val_dataset=Param(str, '.dat file to use for validation (during training)', required=True),
+    val_dataset=Param(str, '.dat file to use for validation', required=True),
     test_dataset=Param(str, '.dat file to use for evaluation', required=True),
-    output_directory=Param(str, 'directory to save outputs (model, accuracy yaml) in', required=True)
+    output_directory=Param(str, 'directory to save outputs', required=True)
 )
 
 @param('data.train_dataset')
@@ -75,11 +74,12 @@ Section('data', 'data related stuff').params(
 @param('data.test_dataset')
 @param('training.batch_size')
 @param('training.num_workers')
-def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None, batch_size=None, num_workers=None):
+def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None, 
+            batch_size=None, num_workers=None):
     paths = {
-        'train': train_dataset,
-        'val': val_dataset,
-        'test': test_dataset
+        'train': os.path.expandvars(train_dataset),
+        'val': os.path.expandvars(val_dataset),
+        'test': os.path.expandvars(test_dataset)
     }   
 
     start_time = time.time()
@@ -121,24 +121,21 @@ def construct_model(arch):
     elif arch == 'efficientnet':
         model = EfficientNetB0()
     elif arch == 'regnet':
-        model = RegNetX_200MF()
+        model = RegNetX_400MF()
     model = model.to(memory_format=ch.channels_last).cuda()
     return model
 
+@param('training.lr_init')
 @param('training.lr')
-@param('training.q')
+@param('training.pnorm')
 @param('training.epochs')
-@param('training.momentum')
-@param('training.weight_decay')
-@param('training.label_smoothing')
 @param('training.lr_peak_epoch')
-@param('data.output_directory')
-def train(model, loaders, lr=None, q=None, epochs=None, label_smoothing=None,
-          momentum=None, weight_decay=None, lr_peak_epoch=None, output_directory=None):
+def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None, 
+        epochs=None, lr_peak_epoch=None, pnorm=None):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
-    opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=q)
-    iters_per_epoch = len(loaders['train'])
+    opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=pnorm)
+    #iters_per_epoch = len(loaders['train'])
     # Cyclic LR with single triangle
     '''
     lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
@@ -147,13 +144,14 @@ def train(model, loaders, lr=None, q=None, epochs=None, label_smoothing=None,
     '''
     lr_schedule = np.interp(np.arange(epochs+1),
                             [0, lr_peak_epoch, epochs],
-                            [2e-4, 1, 0])
+                            [lr_init, 1, 0])
     scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
     #scheduler = lr_scheduler.StepLR(opt, 20, 0.5)
     #scheduler = lr_scheduler.CyclicLR(opt, lr*1e-3, lr, cycle_momentum=False) 
     scaler = GradScaler()
-    loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
-    best_acc = 0
+    loss_fn = CrossEntropyLoss()
+
+    best_acc = 0.0
     best_model = None
 
     for epoch in tqdm(range(epochs)):
@@ -171,29 +169,26 @@ def train(model, loaders, lr=None, q=None, epochs=None, label_smoothing=None,
 
         if (epoch + 1) % 10 == 0:  
             val_acc = validation(model, loaders)
-            model.train()   # return to training
+            print(f'Epoch {epoch+1} validation: {val_acc * 100:.2f}%', file = log_file)
 
             if val_acc > best_acc:
                 best_acc = val_acc
                 best_model = model
-                print(f'best accuracy so far: {val_acc * 100:.2f}%')
-                torch.save(model.state_dict(), f'{output_directory}/model.pt')
+            
+            model.train()   # return to training
     
     # return best model 
     model = best_model
 
-@param('training.lr_tta')
-def evaluate(model, loaders, lr_tta=False):
+def evaluate(model, loaders):
     model.eval()
     accuracies = {}
     with ch.no_grad():
         for name in ['train', 'val', 'test']:
             total_correct, total_num = 0., 0.
-            for ims, labs in tqdm(loaders[name]):
+            for ims, labs in loaders[name]:
                 with autocast():
                     out = model(ims)
-                    if lr_tta:
-                        out += model(ims.flip(-1))
                     total_correct += out.argmax(1).eq(labs).sum().cpu().item()
                     total_num += ims.shape[0]
             accuracies[name] = total_correct / total_num
@@ -204,13 +199,13 @@ def evaluate(model, loaders, lr_tta=False):
 def validation(model, loaders):
     model.eval()
     # see if this is the best model so far         
-    total_correct, total_num = 0., 0.
-    for ims, labs in loaders['val']:
-        with autocast():
-            out = model(ims)
-            total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
-            total_num += ims.shape[0]
-    print(f'validation accuracy: {total_correct / total_num * 100:.2f}%')
+    total_correct, total_num = 0, 0
+    with ch.no_grad():
+        for ims, labs in loaders['val']:
+            with autocast():
+                out = model(ims)
+                total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
+                total_num += ims.shape[0]
 
     return total_correct / total_num
 
@@ -223,12 +218,19 @@ if __name__ == "__main__":
     config.validate(mode='stderr')
     config.summary()
 
+    output_directory = os.path.expandvars(config['data.output_directory'])
+    os.makedirs(output_directory, exist_ok = True)
+
     loaders, start_time = make_dataloaders()
     model = construct_model()
-    train(model, loaders)
-    print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
-    accuracies = evaluate(model, loaders)
+    with log_file = open(f'{output_directory}/log.txt', 'w'):
+        train(model, loaders, log_file)
 
+    accuracies = evaluate(model, loaders)
     acc_file = f'{output_directory}/accuracy.yaml'
     with open(acc_file, 'w') as file:
         yaml.dump(accuracies, file)
+    
+    torch.save(model.state_dict(), f'{output_directory}/model.pt')
+    
+    print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')

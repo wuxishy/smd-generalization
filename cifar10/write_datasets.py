@@ -4,6 +4,8 @@ import time
 import numpy as np
 from tqdm import tqdm
 
+import os, os.path
+
 import torch as ch
 import torch.utils.data as data
 import torchvision
@@ -17,18 +19,21 @@ from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
 
 Section('data', 'arguments to give the writer').params(
+    raw_data=Param(str, 'Where the raw data can be found', required=True)
     train_dataset=Param(str, 'Where to write the new dataset', required=True),
     val_dataset=Param(str, 'Where to write the new dataset', required=True),
     test_dataset=Param(str, 'Where to write the new dataset', required=True)
 )
 
+@param('data.raw_data')
 @param('data.train_dataset')
 @param('data.val_dataset')
 @param('data.test_dataset')
-def main(train_dataset, val_dataset, test_dataset):
+def main(raw_data, train_dataset, val_dataset, test_dataset):
+    raw_data = os.path.expandvars(raw_data)
     datasets = {
-        'train': torchvision.datasets.CIFAR10('~/data', train=True, download=False),
-        'test': torchvision.datasets.CIFAR10('~/data', train=False, download=False)
+        'train': torchvision.datasets.CIFAR10(raw_data, train=True, download=False),
+        'test': torchvision.datasets.CIFAR10(raw_data, train=False, download=False)
     }
 
     for (name, ds) in datasets.items():
@@ -41,21 +46,21 @@ def main(train_dataset, val_dataset, test_dataset):
             train_ds, val_ds = data.random_split(ds, [train_size, val_size])
 
             # construct train and validation datasets 
-            train_path = train_dataset 
+            train_path = os.path.expandvars(train_dataset)
             train_writer = DatasetWriter(train_path, {
                 'image': RGBImageField(), 
                 'label': IntField()
             })
             train_writer.from_indexed_dataset(train_ds)
 
-            val_path = val_dataset 
+            val_path = os.path.expandvars(val_dataset)
             val_writer = DatasetWriter(val_path, {
                 'image': RGBImageField(), 
                 'label': IntField()
             })
             val_writer.from_indexed_dataset(val_ds)
         else: 
-            path = test_dataset
+            path = os.path.expandvars(test_dataset)
             writer = DatasetWriter(path, {
                 'image': RGBImageField(),
                 'label': IntField()
