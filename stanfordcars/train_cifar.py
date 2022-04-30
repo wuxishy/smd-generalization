@@ -53,7 +53,7 @@ from ffcv.writer import DatasetWriter
 
 Section('training', 'Hyperparameters').params(
     arch=Param(str, 'CNN architecture to use', required=True),
-    pnorm=Param(int, 'p-value to use in SMD', required=True)
+    pnorm=Param(int, 'p-value to use in SMD', required=True),
     lr_init=Param(float, 'The initial learning rate to use', required=True),
     lr=Param(float, 'The maximum learning rate to use', required=True),
     epochs=Param(int, 'Number of epochs to run for', required=True),
