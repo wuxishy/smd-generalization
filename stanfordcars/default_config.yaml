@@ -1,0 +1,15 @@
+data:
+  num_workers: 8
+  raw_data: ~/data
+  train_dataset: cifar_train.beton
+  val_dataset: cifar_val.beton
+  val_dataset: cifar_test.beton
+training:
+  arch: mobilenet
+  pnorm: 2.0
+  batch_size: 128
+  epochs: 350
+  lr_init: 1e-6
+  lr: 0.3
+  lr_peak_epoch: 30
+  num_workers: 8
