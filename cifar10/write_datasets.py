@@ -19,7 +19,7 @@ from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
 
 Section('data', 'arguments to give the writer').params(
-    raw_data=Param(str, 'Where the raw data can be found', required=True)
+    raw_data=Param(str, 'Where the raw data can be found', required=True),
     train_dataset=Param(str, 'Where to write the new dataset', required=True),
     val_dataset=Param(str, 'Where to write the new dataset', required=True),
     test_dataset=Param(str, 'Where to write the new dataset', required=True)

@@ -26,6 +26,7 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 import sys, os, os.path
+from copy import deepcopy
 
 from models import *
 
@@ -36,7 +37,6 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.nn import CrossEntropyLoss, Conv2d, BatchNorm2d
 from torch.optim import SGD, Adam, lr_scheduler
 import torchvision
-
 
 from fastargs import get_current_config, Param, Section
 from fastargs.decorators import param
@@ -53,7 +53,7 @@ from ffcv.writer import DatasetWriter
 
 Section('training', 'Hyperparameters').params(
     arch=Param(str, 'CNN architecture to use', required=True),
-    pnorm=Param(int, 'p-value to use in SMD', required=True)
+    pnorm=Param(float, 'p-value to use in SMD', required=True),
     lr_init=Param(float, 'The initial learning rate to use', required=True),
     lr=Param(float, 'The maximum learning rate to use', required=True),
     epochs=Param(int, 'Number of epochs to run for', required=True),
@@ -83,8 +83,8 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
     }   
 
     start_time = time.time()
-    CIFAR_MEAN = [125.307, 122.961, 113.8575]
-    CIFAR_STD = [51.5865, 50.847, 51.255]
+    CIFAR_MEAN = [125.307, 122.950, 113.865]
+    CIFAR_STD = [62.993, 62.089, 66.705]
     loaders = {}
 
     for name in ['train', 'val', 'test']:
@@ -93,8 +93,7 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
         if name == 'train':
             image_pipeline.extend([
                 RandomHorizontalFlip(),
-                RandomTranslate(padding=2, fill=tuple(map(int, CIFAR_MEAN))),
-                Cutout(4, tuple(map(int, CIFAR_MEAN))),
+                RandomTranslate(padding=2),
             ])
         image_pipeline.extend([
             ToTensor(),
@@ -121,7 +120,7 @@ def construct_model(arch):
     elif arch == 'efficientnet':
         model = EfficientNetB0()
     elif arch == 'regnet':
-        model = RegNetX_400MF()
+        model = RegNetX_200MF()
     model = model.to(memory_format=ch.channels_last).cuda()
     return model
 
@@ -143,8 +142,8 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
                             [0, 1, 0])
     '''
     lr_schedule = np.interp(np.arange(epochs+1),
-                            [0, lr_peak_epoch, epochs],
-                            [lr_init, 1, 0])
+                            [1, lr_peak_epoch//5+1, lr_peak_epoch, epochs],
+                            [lr_init, lr_init, 1, 0])
     scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
     #scheduler = lr_scheduler.StepLR(opt, 20, 0.5)
     #scheduler = lr_scheduler.CyclicLR(opt, lr*1e-3, lr, cycle_momentum=False) 
@@ -152,7 +151,7 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
     loss_fn = CrossEntropyLoss()
 
     best_acc = 0.0
-    best_model = None
+    best_model_state = None
 
     for epoch in tqdm(range(epochs)):
         for i, (ims, labs) in enumerate(loaders['train']):
@@ -173,12 +172,13 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
 
             if val_acc > best_acc:
                 best_acc = val_acc
-                best_model = model
+                best_model_state = deepcopy(model.state_dict())
+                print(f'Epoch {epoch+1}: best so far', file = log_file)
             
             model.train()   # return to training
     
     # return best model 
-    model = best_model
+    return best_model_state
 
 def evaluate(model, loaders):
     model.eval()
@@ -224,13 +224,15 @@ if __name__ == "__main__":
     loaders, start_time = make_dataloaders()
     model = construct_model()
     with open(f'{output_directory}/log.txt', 'w') as log_file:
-        train(model, loaders, log_file)
+        best_model_state = train(model, loaders, log_file)
+
+    model.load_state_dict(best_model_state)
 
     accuracies = evaluate(model, loaders)
     acc_file = f'{output_directory}/accuracy.yaml'
     with open(acc_file, 'w') as file:
         yaml.dump(accuracies, file)
     
-    torch.save(model.state_dict(), f'{output_directory}/model.pt')
+    torch.save(best_model_state, f'{output_directory}/model.pt')
     
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
