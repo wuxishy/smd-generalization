@@ -9,8 +9,7 @@ Created on Sat Apr 30 14:30:14 2022
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 
-tranform = transforms.Compose([transforms.Resize((256, 256)), 
-                               transforms.CenterCrop((224, 224)),
+tranform = transforms.Compose([transforms.Resize((256, 256)),
                                transforms.ToTensor()])
 
 dataset = datasets.Flowers102(root = "../../azizan-lab_shared/datasets", split = 'train', transform = tranform)
@@ -33,5 +32,5 @@ for images, _ in loader:
 mean /= len(loader.dataset)
 std /= len(loader.dataset)
 
-print(mean)
-print(std)
+print(mean*255)
+print(std*255)
