@@ -83,8 +83,8 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
     }   
 
     start_time = time.time()
-    FLOWERS_MEAN = [125.307, 122.950, 113.865]
-    FLOWERS_STD = [62.993, 62.089, 66.705]
+    FLOWERS_MEAN = [110.4046, 97.3915, 75.5849]
+    FLOWERS_STD = [66.1458, 53.5585, 56.5548]
     loaders = {}
 
     for name in ['train', 'val', 'test']:
