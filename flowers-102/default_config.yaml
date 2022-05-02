@@ -1,9 +1,9 @@
 data:
   num_workers: 8
   raw_data: ../data
-  train_dataset: cifar_train.beton
-  val_dataset: cifar_val.beton
-  val_dataset: cifar_test.beton
+  train_dataset: flowers-102_train.beton
+  val_dataset: flowers-102_val.beton
+  val_dataset: flowers-102_test.beton
 training:
   arch: mobilenet
   pnorm: 2.0
