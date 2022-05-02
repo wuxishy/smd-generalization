@@ -13,7 +13,7 @@ tranform = transforms.Compose([transforms.Resize((256, 256)),
                                transforms.CenterCrop((224, 224)),
                                transforms.ToTensor()])
 
-dataset = datasets.StanfordCars(root = "../../azizan-lab_shared/datasets", split = 'train', transform = tranform)
+dataset = datasets.Flowers102(root = "../../azizan-lab_shared/datasets", split = 'train', transform = tranform)
 
 
 loader = DataLoader(dataset,
