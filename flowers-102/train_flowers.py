@@ -47,7 +47,7 @@ from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder
 from ffcv.loader import Loader, OrderOption
 from ffcv.pipeline.operation import Operation
 from ffcv.transforms import RandomHorizontalFlip, Cutout, \
-    RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage, Resize, RandomCrop
+    RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage, RandomResizedCropRGBImageDecoder
 from ffcv.transforms.common import Squeeze
 from ffcv.writer import DatasetWriter
 
@@ -93,10 +93,13 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
         if name == 'train':
             image_pipeline.extend([
                 RandomHorizontalFlip(),
-                Resize((256, 256)),
-                RandomCrop((224, 224)),
+                RandomResizedCropRGBImageDecoder((224, 224)),
                 RandomTranslate(padding=2, fill=tuple(map(int, FLOWERS_MEAN))),
                 Cutout(4, tuple(map(int, FLOWERS_MEAN))),
+            ])
+        elif name == 'val':
+            image_pipeline.extend([
+                RandomResizedCropRGBImageDecoder((224, 224)),
             ])
         image_pipeline.extend([
             ToTensor(),

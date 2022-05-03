@@ -105,7 +105,7 @@ class Block(nn.Module):
 
 
 class EfficientNet(nn.Module):
-    def __init__(self, cfg, num_classes=10):
+    def __init__(self, cfg, num_classes=102):
         super(EfficientNet, self).__init__()
         self.cfg = cfg
         self.conv1 = nn.Conv2d(3,
