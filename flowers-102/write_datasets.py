@@ -33,32 +33,26 @@ def main(raw_data, train_dataset, val_dataset, test_dataset):
     raw_data = os.path.expandvars(raw_data)
     datasets = {
         'train': torchvision.datasets.Flowers102(raw_data, split='train'),
+        'val': torchvision.datasets.Flowers102(raw_data, split='val'),
         'test': torchvision.datasets.Flowers102(raw_data, split='test')
     }
 
     for (name, ds) in datasets.items():
-        if name == 'train':
-            # generate indices for train vs. validation split
-            dataset_size = len(ds)
-            train_size = int(dataset_size * 0.9)
-            val_size = dataset_size - train_size
-
-            train_ds, val_ds = data.random_split(ds, [train_size, val_size])
-
-            # construct train and validation datasets 
+        if name == 'train': 
             train_path = os.path.expandvars(train_dataset)
             train_writer = DatasetWriter(train_path, {
                 'image': RGBImageField(), 
                 'label': IntField()
             })
-            train_writer.from_indexed_dataset(train_ds)
+            train_writer.from_indexed_dataset(train_dataset)
 
+        elif name == 'val':
             val_path = os.path.expandvars(val_dataset)
             val_writer = DatasetWriter(val_path, {
                 'image': RGBImageField(), 
                 'label': IntField()
             })
-            val_writer.from_indexed_dataset(val_ds)
+            val_writer.from_indexed_dataset(val_dataset)
         else: 
             path = os.path.expandvars(test_dataset)
             writer = DatasetWriter(path, {
