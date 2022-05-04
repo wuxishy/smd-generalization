@@ -32,8 +32,8 @@ Section('data', 'arguments to give the writer').params(
 def main(raw_data, train_dataset, val_dataset, test_dataset):
     raw_data = os.path.expandvars(raw_data)
     datasets = {
-        'train': torchvision.datasets.CIFAR10(raw_data, train=True, download=False),
-        'test': torchvision.datasets.CIFAR10(raw_data, train=False, download=False)
+        'train': torchvision.datasets.StanfordCars(raw_data, split='train', download=False),
+        'test': torchvision.datasets.StanfordCars(raw_data, split='test', download=False)
     }
 
     for (name, ds) in datasets.items():
@@ -48,21 +48,30 @@ def main(raw_data, train_dataset, val_dataset, test_dataset):
             # construct train and validation datasets 
             train_path = os.path.expandvars(train_dataset)
             train_writer = DatasetWriter(train_path, {
-                'image': RGBImageField(), 
+                'image': RGBImageField(write_mode='smart', 
+                                       max_resolution=400, 
+                                       compress_probability=None, 
+                                       jpeg_quality=90), 
                 'label': IntField()
             })
             train_writer.from_indexed_dataset(train_ds)
 
             val_path = os.path.expandvars(val_dataset)
             val_writer = DatasetWriter(val_path, {
-                'image': RGBImageField(), 
+                'image': RGBImageField(write_mode='smart', 
+                                       max_resolution=400, 
+                                       compress_probability=None, 
+                                       jpeg_quality=90), 
                 'label': IntField()
             })
             val_writer.from_indexed_dataset(val_ds)
         else: 
             path = os.path.expandvars(test_dataset)
             writer = DatasetWriter(path, {
-                'image': RGBImageField(),
+                'image': RGBImageField(write_mode='smart', 
+                                       max_resolution=400, 
+                                       compress_probability=None, 
+                                       jpeg_quality=90), 
                 'label': IntField()
             })
             writer.from_indexed_dataset(ds)
