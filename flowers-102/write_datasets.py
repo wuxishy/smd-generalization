@@ -36,30 +36,19 @@ def main(raw_data, train_dataset, val_dataset, test_dataset):
         'val': torchvision.datasets.Flowers102(raw_data, split='val'),
         'test': torchvision.datasets.Flowers102(raw_data, split='test')
     }
+    data_path = {
+        'train': os.path.expandvars(train_dataset),
+        'val': os.path.expandvars(val_dataset),
+        'test': os.path.expandvars(test_dataset),
+    }
 
     for (name, ds) in datasets.items():
-        if name == 'train': 
-            train_path = os.path.expandvars(train_dataset)
-            train_writer = DatasetWriter(train_path, {
-                'image': RGBImageField(), 
-                'label': IntField()
-            })
-            train_writer.from_indexed_dataset(train_dataset)
-
-        elif name == 'val':
-            val_path = os.path.expandvars(val_dataset)
-            val_writer = DatasetWriter(val_path, {
-                'image': RGBImageField(), 
-                'label': IntField()
-            })
-            val_writer.from_indexed_dataset(val_dataset)
-        else: 
-            path = os.path.expandvars(test_dataset)
-            writer = DatasetWriter(path, {
-                'image': RGBImageField(),
-                'label': IntField()
-            })
-            writer.from_indexed_dataset(ds)
+        train_path = os.path.expandvars(data_path[name])
+        train_writer = DatasetWriter(train_path, {
+            'image': RGBImageField(), 
+            'label': IntField()
+        })
+        train_writer.from_indexed_dataset(ds)
 
 if __name__ == "__main__":
     config = get_current_config()

@@ -28,26 +28,26 @@ from tqdm import tqdm
 import sys, os, os.path
 from copy import deepcopy
 
-from models import *
-
 import SMD_opt
 
 import torch as ch
 from torch.cuda.amp import GradScaler, autocast
-from torch.nn import CrossEntropyLoss, Conv2d, BatchNorm2d
+from torch.nn import CrossEntropyLoss, Conv2d, BatchNorm2d, Linear
 from torch.optim import SGD, Adam, lr_scheduler
 import torchvision
+import torchvision.models as models
 
 from fastargs import get_current_config, Param, Section
 from fastargs.decorators import param
 from fastargs.validation import And, OneOf
 
 from ffcv.fields import IntField, RGBImageField
-from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder
+from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder, \
+    RandomResizedCropRGBImageDecoder, CenterCropRGBImageDecoder
 from ffcv.loader import Loader, OrderOption
 from ffcv.pipeline.operation import Operation
-from ffcv.transforms import RandomHorizontalFlip, Cutout, \
-    RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage, RandomResizedCropRGBImageDecoder
+from ffcv.transforms import RandomHorizontalFlip, Cutout, NormalizeImage, \
+    RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage
 from ffcv.transforms.common import Squeeze
 from ffcv.writer import DatasetWriter
 
@@ -83,30 +83,26 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
     }   
 
     start_time = time.time()
-    FLOWERS_MEAN = [110.4046, 97.3915, 75.5849]
-    FLOWERS_STD = [66.1458, 53.5585, 56.5548]
+    FLOWERS_MEAN = np.array([110.4046, 97.3915, 75.5849])
+    FLOWERS_STD = np.array([66.1458, 53.5585, 56.5548])
     loaders = {}
 
     for name in ['train', 'val', 'test']:
-        label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice('cuda:0'), Squeeze()]
-        image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
+        label_pipeline = [IntDecoder(), ToTensor(), ToDevice('cuda:0'), Squeeze()]
         if name == 'train':
-            image_pipeline.extend([
+            image_pipeline = [
+                RandomResizedCropRGBImageDecoder((224, 224)),
                 RandomHorizontalFlip(),
-                RandomResizedCropRGBImageDecoder((224, 224)),
-                RandomTranslate(padding=2, fill=tuple(map(int, FLOWERS_MEAN))),
-                Cutout(4, tuple(map(int, FLOWERS_MEAN))),
-            ])
-        elif name == 'val':
-            image_pipeline.extend([
-                RandomResizedCropRGBImageDecoder((224, 224)),
-            ])
+            ]
+        else:
+            image_pipeline = [
+                CenterCropRGBImageDecoder((224, 224), 224/256),
+            ]
         image_pipeline.extend([
             ToTensor(),
             ToDevice('cuda:0', non_blocking=True),
             ToTorchImage(),
-            Convert(ch.float16),
-            torchvision.transforms.Normalize(FLOWERS_MEAN, FLOWERS_STD),
+            NormalizeImage(FLOWERS_MEAN, FLOWERS_STD, np.float16),
         ])
         
         ordering = OrderOption.RANDOM if name == 'train' else OrderOption.SEQUENTIAL
@@ -120,13 +116,20 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
 @param('training.arch')
 def construct_model(arch):
     if arch == 'resnet':
-        model = ResNet18()
+        model = models.resnet50(pretrained=True)
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        model.fc = Linear(in_features=model.fc.in_features, out_features=102)
+        for param in model.fc.parameters():
+            param.requires_grad = True
+    
     elif arch == 'mobilenet':
-        model = MobileNetV2()
+        model = models.mobilenet_v2(num_classes = 102)
     elif arch == 'efficientnet':
-        model = EfficientNetB0()
+        model = models.efficientnet_b0(num_classes = 102)
     elif arch == 'regnet':
-        model = RegNetX_200MF()
+        model = models.regnet_x_400mf(num_classes = 102)
     model = model.to(memory_format=ch.channels_last).cuda()
     return model
 
@@ -164,7 +167,7 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
             opt.zero_grad(set_to_none=True)
             with autocast():
                 out = model(ims)
-                loss = loss_fn(out, labs)
+                loss = loss_fn(out, labs - 1)
 
             scaler.scale(loss).backward()
             scaler.step(opt)
@@ -180,6 +183,8 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
                 best_acc = val_acc
                 best_model_state = deepcopy(model.state_dict())
                 print(f'Epoch {epoch+1}: best so far', file = log_file)
+
+            log_file.flush()
             
             model.train()   # return to training
     
@@ -192,10 +197,10 @@ def evaluate(model, loaders):
     with ch.no_grad():
         for name in ['train', 'val', 'test']:
             total_correct, total_num = 0., 0.
-            for ims, labs in loaders[name]:
+            for ims, labs in tqdm(loaders[name]):
                 with autocast():
                     out = model(ims)
-                    total_correct += out.argmax(1).eq(labs).sum().cpu().item()
+                    total_correct += out.argmax(1).eq(labs-1).sum().cpu().item()
                     total_num += ims.shape[0]
             accuracies[name] = total_correct / total_num
             print(f'{name} accuracy: {total_correct / total_num * 100:.2f}%')
@@ -210,7 +215,7 @@ def validation(model, loaders):
         for ims, labs in loaders['val']:
             with autocast():
                 out = model(ims)
-                total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
+                total_correct += out.argmax(1).eq(labs-1).sum().cpu().item() 
                 total_num += ims.shape[0]
 
     return total_correct / total_num
@@ -225,6 +230,7 @@ if __name__ == "__main__":
     config.summary()
 
     output_directory = os.path.expandvars(config['data.output_directory'])
+    print(output_directory)
     os.makedirs(output_directory, exist_ok = True)
 
     loaders, start_time = make_dataloaders()
@@ -239,6 +245,6 @@ if __name__ == "__main__":
     with open(acc_file, 'w') as file:
         yaml.dump(accuracies, file)
     
-    torch.save(best_model_state, f'{output_directory}/model.pt')
+    ch.save(best_model_state, f'{output_directory}/model.pt')
     
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
