@@ -306,7 +306,9 @@ class ImageNetTrainer:
 
             if log_level > 0:
                 extra_dict = {
-                    'train_loss': train_loss,
+                    'train_top_1': train_loss['top_1'],
+                    'train_top_5': train_loss['top_5'],
+                    'train_loss': train_loss['loss'],
                     'epoch': epoch
                 }
 
@@ -323,8 +325,8 @@ class ImageNetTrainer:
         if self.gpu == 0:
             self.log(dict({
                 'current_lr': self.optimizer.param_groups[0]['lr'],
-                'top_1': stats['top_1'],
-                'top_5': stats['top_5'],
+                'val_top_1': stats['top_1'],
+                'val_top_5': stats['top_5'],
                 'val_time': val_time
             }, **extra_dict))
 
@@ -371,7 +373,12 @@ class ImageNetTrainer:
             self.optimizer.zero_grad(set_to_none=True)
             with autocast():
                 output = self.model(images)
+            
+                for k in ['top_1', 'top_5']:
+                    self.train_meters[k](output, target)
+                
                 loss_train = self.loss(output, target)
+                self.train_meters['loss'](loss_train)
 
             self.scaler.scale(loss_train).backward()
             self.scaler.step(self.optimizer)
@@ -379,7 +386,7 @@ class ImageNetTrainer:
             ### Training end
 
             ### Logging start
-            if log_level > 0:
+            if log_level > 1:
                 losses.append(loss_train.detach())
 
                 group_lrs = []
@@ -394,7 +401,13 @@ class ImageNetTrainer:
 
                 msg = ', '.join(f'{n}={v}' for n, v in zip(names, values))
                 iterator.set_description(msg)
+            elif log_level == 1:
+                iterator.set_description(f'epoch: {epoch}')
             ### Logging end
+
+        stats = {k: m.compute().item() for k, m in self.train_meters.items()}
+        [meter.reset() for meter in self.train_meters.values()]
+        return stats
 
     @param('validation.lr_tta')
     def val_loop(self, lr_tta):
@@ -420,6 +433,12 @@ class ImageNetTrainer:
 
     @param('logging.folder')
     def initialize_logger(self, folder):
+        self.train_meters = {
+            'top_1': torchmetrics.Accuracy(compute_on_step=False).to(self.gpu),
+            'top_5': torchmetrics.Accuracy(compute_on_step=False, top_k=5).to(self.gpu),
+            'loss': MeanScalarMetric(compute_on_step=False).to(self.gpu)
+        }
+        
         self.val_meters = {
             'top_1': torchmetrics.Accuracy(compute_on_step=False).to(self.gpu),
             'top_5': torchmetrics.Accuracy(compute_on_step=False, top_k=5).to(self.gpu),
@@ -442,7 +461,7 @@ class ImageNetTrainer:
                 json.dump(params, handle)
 
     def log(self, content):
-        print(f'=> Log: {content}')
+        #print(f'=> Log: {content}')
         if self.gpu != 0: return
         cur_time = time.time()
         with open(self.log_folder / 'log', 'a+') as fd:
