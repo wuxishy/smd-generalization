@@ -64,21 +64,18 @@ Section('training', 'Hyperparameters').params(
 
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training', required=True),
-    val_dataset=Param(str, '.dat file to use for validation', required=True),
     test_dataset=Param(str, '.dat file to use for evaluation', required=True),
     output_directory=Param(str, 'directory to save outputs', required=True)
 )
 
 @param('data.train_dataset')
-@param('data.val_dataset')
 @param('data.test_dataset')
 @param('training.batch_size')
 @param('training.num_workers')
-def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None, 
+def make_dataloaders(train_dataset=None, test_dataset=None, 
             batch_size=None, num_workers=None):
     paths = {
         'train': os.path.expandvars(train_dataset),
-        'val': os.path.expandvars(val_dataset),
         'test': os.path.expandvars(test_dataset)
     }   
 
@@ -87,7 +84,7 @@ def make_dataloaders(train_dataset=None, val_dataset=None, test_dataset=None,
     CIFAR_STD = [62.993, 62.089, 66.705]
     loaders = {}
 
-    for name in ['train', 'val', 'test']:
+    for name in ['train', 'test']:
         label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice('cuda:0'), Squeeze()]
         image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
         if name == 'train':
@@ -151,10 +148,7 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss()
 
-    best_acc = 0.0
-    best_model_state = None
-
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(12)):
         for i, (ims, labs) in enumerate(loaders['train']):
             opt.zero_grad(set_to_none=True)
             with autocast():
@@ -168,24 +162,13 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
         scheduler.step()
 
         if (epoch + 1) % 10 == 0:  
-            val_acc = validation(model, loaders)
-            print(f'Epoch {epoch+1} validation: {val_acc * 100:.2f}%', file = log_file)
-
-            if val_acc > best_acc:
-                best_acc = val_acc
-                best_model_state = deepcopy(model.state_dict())
-                print(f'Epoch {epoch+1}: best so far', file = log_file)
-            
-            model.train()   # return to training
-    
-    # return best model 
-    return best_model_state
+            print(f'Epoch {epoch+1} loss: {loss.item():.4f}', file = log_file)
 
 def evaluate(model, loaders):
     model.eval()
     accuracies = {}
     with ch.no_grad():
-        for name in ['train', 'val', 'test']:
+        for name in ['train', 'test']:
             total_correct, total_num = 0., 0.
             for ims, labs in loaders[name]:
                 with autocast():
@@ -225,15 +208,13 @@ if __name__ == "__main__":
     loaders, start_time = make_dataloaders()
     model = construct_model()
     with open(f'{output_directory}/log.txt', 'w') as log_file:
-        best_model_state = train(model, loaders, log_file)
-
-    model.load_state_dict(best_model_state)
+        train(model, loaders, log_file)
 
     accuracies = evaluate(model, loaders)
     acc_file = f'{output_directory}/accuracy.yaml'
     with open(acc_file, 'w') as file:
         yaml.dump(accuracies, file)
     
-    torch.save(best_model_state, f'{output_directory}/model.pt')
+    torch.save(model, f'{output_directory}/model.pt')
     
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
