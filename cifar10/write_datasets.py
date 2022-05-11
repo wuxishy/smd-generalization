@@ -38,18 +38,14 @@ def main(raw_data, train_dataset, test_dataset):
         if name == 'train':
             # construct train and validation datasets 
             path = os.path.expandvars(train_dataset)
-            writer = DatasetWriter(path, {
-                'image': RGBImageField(), 
-                'label': IntField()
-            })
-            writer.from_indexed_dataset(ds)
         else: 
             path = os.path.expandvars(test_dataset)
-            writer = DatasetWriter(path, {
-                'image': RGBImageField(),
-                'label': IntField()
-            })
-            writer.from_indexed_dataset(ds)
+        
+        writer = DatasetWriter(path, {
+            'image': RGBImageField(), 
+            'label': IntField()
+        })
+        writer.from_indexed_dataset(ds)
 
 if __name__ == "__main__":
     config = get_current_config()
