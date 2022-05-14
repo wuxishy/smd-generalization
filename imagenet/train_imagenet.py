@@ -76,7 +76,7 @@ Section('validation', 'Validation parameters stuff').params(
 Section('training', 'training hyper param stuff').params(
     eval_only=Param(int, 'eval only?', default=0),
     batch_size=Param(int, 'The batch size', default=512),
-    optimizer=Param(And(str, OneOf(['sgd'])), 'The optimizer', default='sgd'),
+    optimizer=Param(And(str, OneOf(['sgd', 'smd'])), 'The optimizer', default='sgd'),
     pnorm=Param(float, 'p-norm for smd optimizer', default=2.0),
     momentum=Param(float, 'SGD momentum', default=0.9),
     weight_decay=Param(float, 'weight decay', default=4e-5),
@@ -194,8 +194,6 @@ class ImageNetTrainer:
     @param('training.label_smoothing')
     def create_optimizer(self, pnorm, momentum, optimizer, weight_decay,
                          label_smoothing):
-        assert optimizer == 'sgd'
-
         # Only do weight decay on non-batchnorm parameters
         all_params = list(self.model.named_parameters())
         bn_params = [v for k, v in all_params if ('bn' in k)]
@@ -207,9 +205,11 @@ class ImageNetTrainer:
             'params': other_params,
             'weight_decay': weight_decay
         }]
-
-        #self.optimizer = ch.optim.SGD(param_groups, lr=1, momentum=momentum)
-        self.optimizer = SMD_qnorm(param_groups, lr=1, q=pnorm)
+        
+        if optimizer == 'sgd':
+            self.optimizer = ch.optim.SGD(param_groups, lr=1, momentum=momentum)
+        elif optimizer == 'smd':
+            self.optimizer = SMD_qnorm(param_groups, lr=1, q=pnorm)
         self.loss = ch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
 
     @param('data.train_dataset')
@@ -318,6 +318,8 @@ class ImageNetTrainer:
         if self.gpu == 0:
             ch.save(self.model.state_dict(), self.log_folder / 'final_weights.pt')
 
+        print(f'Total time (hr): {(time.time() - self.start_time) / 3600:.3f}')
+
     def eval_and_log(self, extra_dict={}):
         start_val = time.time()
         stats = self.val_loop()
@@ -416,7 +418,7 @@ class ImageNetTrainer:
 
         with ch.no_grad():
             with autocast():
-                for images, target in tqdm(self.val_loader):
+                for images, target in self.val_loader:
                     output = self.model(images)
                     if lr_tta:
                         output += self.model(ch.flip(images, dims=[3]))
@@ -464,7 +466,7 @@ class ImageNetTrainer:
         #print(f'=> Log: {content}')
         if self.gpu != 0: return
         cur_time = time.time()
-        with open(self.log_folder / 'log', 'a+') as fd:
+        with open(self.log_folder / 'log.txt', 'a+') as fd:
             fd.write(json.dumps({
                 'timestamp': cur_time,
                 'relative_time': cur_time - self.start_time,
