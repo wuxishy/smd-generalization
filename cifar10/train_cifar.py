@@ -54,10 +54,10 @@ from ffcv.writer import DatasetWriter
 Section('training', 'Hyperparameters').params(
     arch=Param(str, 'CNN architecture to use', required=True),
     pnorm=Param(float, 'p-value to use in SMD', required=True),
-    lr_init=Param(float, 'The initial learning rate to use', required=True),
+    # lr_init=Param(float, 'The initial learning rate to use', required=True),
     lr=Param(float, 'The maximum learning rate to use', required=True),
     epochs=Param(int, 'Number of epochs to run for', required=True),
-    lr_peak_epoch=Param(int, 'Peak epoch for cyclic lr', required=True),
+    # lr_peak_epoch=Param(int, 'Peak epoch for cyclic lr', required=True),
     batch_size=Param(int, 'Batch size', default=128),
     num_workers=Param(int, 'The number of workers', default=8),
 )
@@ -124,23 +124,21 @@ def construct_model(arch):
     model = model.to(memory_format=ch.channels_last).cuda()
     return model
 
-@param('training.lr_init')
 @param('training.lr')
 @param('training.pnorm')
 @param('training.epochs')
-@param('training.lr_peak_epoch')
-def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None, 
-        epochs=None, lr_peak_epoch=None, pnorm=None):
+def train(model, loaders, log_file = sys.stdout, lr=None, 
+        epochs=None, pnorm=None):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
     opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=pnorm)
     
-    # Cyclic LR with single triangle
-    iters_per_epoch = len(loaders['train'])
-    lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
-                            [0, lr_peak_epoch // 2 * iters_per_epoch,
-                                lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
-                            [lr_init, lr_init, lr, 0])
+    # # Cyclic LR with single triangle
+    # iters_per_epoch = len(loaders['train'])
+    # lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
+    #                         [0, lr_peak_epoch // 2 * iters_per_epoch,
+    #                             lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
+    #                         [lr_init, lr_init, lr, 0])
     '''
     lr_schedule = np.interp(np.arange(epochs+1),
                             [1, lr_peak_epoch//5+1, lr_peak_epoch, epochs],
@@ -156,8 +154,9 @@ def train(model, loaders, log_file = sys.stdout, lr_init=None, lr=None,
         model.train()
 
         for i, (ims, labs) in enumerate(loaders['train']):
-            for param_group in opt.param_groups:
-                param_group['lr'] = lr_schedule[epoch * iters_per_epoch + i]
+            # Train with a fixed learning rate
+            # for param_group in opt.param_groups:
+            #     param_group['lr'] = lr_schedule[epoch * iters_per_epoch + i]
 
             opt.zero_grad(set_to_none=True)
             with autocast():
