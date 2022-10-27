@@ -111,17 +111,50 @@ def make_dataloaders(train_dataset=None, test_dataset=None,
 
 @param('training.arch')
 def construct_model(arch):
+
+    def resnet_weights_init(m):
+        classname = m.__class__.__name__
+        if classname.find('Conv') != -1:
+            m.weight.data.normal_(0.0, 0.01)
+        elif classname.find('BatchNorm') != -1:
+            m.weight.data.normal_(0.0, 0.01)
+            m.bias.data.fill_(0)
+        elif classname.find('Linear') != -1:
+            m.weight.data.uniform_(-0.01, 0.01)
+            m.bias.data.uniform_(-0.1, 0.1)
+
+    def mobilenet_weights_init(m):
+        classname = m.__class__.__name__
+        if classname.find('Conv') != -1:
+            m.weight.data.normal_(0.0, 0.03)
+        elif classname.find('BatchNorm') != -1:
+            m.weight.data.normal_(0.0, 0.03)
+            m.bias.data.fill_(0)
+        elif classname.find('Linear') != -1:
+            m.weight.data.uniform_(-0.03, 0.03)
+            m.bias.data.uniform_(-0.3, 0.3)
+
     if arch == 'resnet':
         model = ResNet18()
+        model.apply(resnet_weights_init)
     elif arch == 'vgg':
         model = VGG('VGG11')
     elif arch == 'mobilenet':
         model = MobileNetV2()
+        model.apply(mobilenet_weights_init)
     elif arch == 'efficientnet':
         model = EfficientNetB0()
     elif arch == 'regnet':
         model = RegNetX_200MF()
     model = model.to(memory_format=ch.channels_last).cuda()
+
+    
+
+    # if arch == 'resnet':
+    #     model.apply(resnet_weights_init)
+    # elif arch == 'mobilenet':
+        # model.apply(mobilenet_weights_init)
+    
     return model
 
 @param('training.lr')
@@ -131,24 +164,13 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
         epochs=None, pnorm=None):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
+    print("learning rate =", lr)
     opt = SMD_opt.SMD_qnorm(model.parameters(), lr=lr, q=pnorm)
-    
-    # # Cyclic LR with single triangle
-    # iters_per_epoch = len(loaders['train'])
-    # lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
-    #                         [0, lr_peak_epoch // 2 * iters_per_epoch,
-    #                             lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
-    #                         [lr_init, lr_init, lr, 0])
-    '''
-    lr_schedule = np.interp(np.arange(epochs+1),
-                            [1, lr_peak_epoch//5+1, lr_peak_epoch, epochs],
-                            [lr_init, lr_init, 1, 0])
-    '''
-    #scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
-    #scheduler = lr_scheduler.StepLR(opt, 20, 0.5)
-    #scheduler = lr_scheduler.CyclicLR(opt, lr*1e-3, lr, cycle_momentum=False) 
+
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss()
+
+    best_test_acc = 0
 
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -172,10 +194,15 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
         if (epoch + 1) % 10 == 0:  
             print(f'Epoch {epoch+1} loss: {loss.item():.4f}', file = log_file)
             train_acc = evaluate(model, loaders, 'train')
-            print(f'Epoch {epoch+1} test acc: {train_acc:.4f}', file = log_file)
+            print(f'Epoch {epoch+1} train acc: {train_acc:.4f}', file = log_file)
             test_acc = evaluate(model, loaders, 'test')
             print(f'Epoch {epoch+1} test acc: {test_acc:.4f}', file = log_file)
             log_file.flush()
+
+            if test_acc > best_test_acc:
+                print("Saving best model...", file=log_file)
+                best_test_acc = test_acc
+                torch.save(model, f'{output_directory}/best_model.pt')
 
 def evaluate(model, loaders, name):
     model.eval()
@@ -221,6 +248,6 @@ if __name__ == "__main__":
     with open(acc_file, 'w') as file:
         yaml.dump(accuracies, file)
     
-    torch.save(model, f'{output_directory}/model.pt')
+    torch.save(model, f'{output_directory}/final_model.pt')
     
     print(f'Total time (min): {(time.time() - start_time) / 60:.2f}')
