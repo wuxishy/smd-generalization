@@ -112,43 +112,41 @@ def make_dataloaders(train_dataset=None, test_dataset=None,
 @param('training.arch')
 def construct_model(arch):
 
-    def resnet_weights_init(m):
-        classname = m.__class__.__name__
-        if classname.find('Conv') != -1:
-            m.weight.data.normal_(0.0, 0.01)
-        elif classname.find('BatchNorm') != -1:
-            m.weight.data.normal_(0.0, 0.01)
-            m.bias.data.fill_(0)
-        elif classname.find('Linear') != -1:
-            m.weight.data.uniform_(-0.01, 0.01)
-            m.bias.data.uniform_(-0.1, 0.1)
+    # def resnet_weights_init(m):
+    #     classname = m.__class__.__name__
+    #     if classname.find('Conv') != -1:
+    #         m.weight.data.normal_(0.0, 0.01)
+    #     elif classname.find('BatchNorm') != -1:
+    #         m.weight.data.normal_(0.0, 0.01)
+    #         m.bias.data.fill_(0)
+    #     elif classname.find('Linear') != -1:
+    #         m.weight.data.uniform_(-0.01, 0.01)
+    #         m.bias.data.uniform_(-0.1, 0.1)
 
-    def mobilenet_weights_init(m):
-        classname = m.__class__.__name__
-        if classname.find('Conv') != -1:
-            m.weight.data.normal_(0.0, 0.03)
-        elif classname.find('BatchNorm') != -1:
-            m.weight.data.normal_(0.0, 0.03)
-            m.bias.data.fill_(0)
-        elif classname.find('Linear') != -1:
-            m.weight.data.uniform_(-0.03, 0.03)
-            m.bias.data.uniform_(-0.3, 0.3)
+    # def mobilenet_weights_init(m):
+    #     classname = m.__class__.__name__
+    #     if classname.find('Conv') != -1:
+    #         m.weight.data.normal_(0.0, 0.03)
+    #     elif classname.find('BatchNorm') != -1:
+    #         m.weight.data.normal_(0.0, 0.03)
+    #         m.bias.data.fill_(0)
+    #     elif classname.find('Linear') != -1:
+    #         m.weight.data.uniform_(-0.03, 0.03)
+    #         m.bias.data.uniform_(-0.3, 0.3)
 
     if arch == 'resnet':
         model = ResNet18()
-        model.apply(resnet_weights_init)
+        # model.apply(resnet_weights_init)
     elif arch == 'vgg':
         model = VGG('VGG11')
     elif arch == 'mobilenet':
         model = MobileNetV2()
-        model.apply(mobilenet_weights_init)
+        # model.apply(mobilenet_weights_init)
     elif arch == 'efficientnet':
         model = EfficientNetB0()
     elif arch == 'regnet':
         model = RegNetX_200MF()
     model = model.to(memory_format=ch.channels_last).cuda()
-
-    
 
     # if arch == 'resnet':
     #     model.apply(resnet_weights_init)
