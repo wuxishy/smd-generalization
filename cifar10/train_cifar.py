@@ -200,7 +200,7 @@ def train(model, loaders, output_directory, log_file = sys.stdout, lr=None,
                 best_test_acc = test_acc
                 torch.save(model, f'{output_directory}/best_model.pt')
         
-        if (epoch + 1) == 50:
+        if (epoch + 1) % 25 == 0:
             print("Checkpointing...", file=log_file)
             torch.save({
                 'epoch': epoch + 1,
