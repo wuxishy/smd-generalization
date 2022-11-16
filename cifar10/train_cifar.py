@@ -68,6 +68,11 @@ Section('data', 'data related stuff').params(
     output_directory=Param(str, 'directory to save outputs', required=True)
 )
 
+Section('checkpoint', 'for when training from a checkpoint').params(
+    from_checkpoint=Param(bool, 'whether to train from a checkpoint', required=True),
+    trial=Param(int, 'which trial number to grab checkpoint from', required=True)
+)
+
 @param('data.train_dataset')
 @param('data.test_dataset')
 @param('training.batch_size')
@@ -103,55 +108,30 @@ def make_dataloaders(train_dataset=None, test_dataset=None,
         
         ordering = OrderOption.RANDOM if name == 'train' else OrderOption.SEQUENTIAL
 
+        # loaders[name] = Loader(paths[name], batch_size=batch_size, num_workers=num_workers,
+        #                        order=ordering, drop_last=(name == 'train'),
+        #                        pipelines={'image': image_pipeline, 'label': label_pipeline})
         loaders[name] = Loader(paths[name], batch_size=batch_size, num_workers=num_workers,
-                               order=ordering, drop_last=(name == 'train'),
+                               order=ordering, drop_last=False,
                                pipelines={'image': image_pipeline, 'label': label_pipeline})
 
     return loaders, start_time
 
 @param('training.arch')
-def construct_model(arch):
-
-    # def resnet_weights_init(m):
-    #     classname = m.__class__.__name__
-    #     if classname.find('Conv') != -1:
-    #         m.weight.data.normal_(0.0, 0.01)
-    #     elif classname.find('BatchNorm') != -1:
-    #         m.weight.data.normal_(0.0, 0.01)
-    #         m.bias.data.fill_(0)
-    #     elif classname.find('Linear') != -1:
-    #         m.weight.data.uniform_(-0.01, 0.01)
-    #         m.bias.data.uniform_(-0.1, 0.1)
-
-    # def mobilenet_weights_init(m):
-    #     classname = m.__class__.__name__
-    #     if classname.find('Conv') != -1:
-    #         m.weight.data.normal_(0.0, 0.03)
-    #     elif classname.find('BatchNorm') != -1:
-    #         m.weight.data.normal_(0.0, 0.03)
-    #         m.bias.data.fill_(0)
-    #     elif classname.find('Linear') != -1:
-    #         m.weight.data.uniform_(-0.03, 0.03)
-    #         m.bias.data.uniform_(-0.3, 0.3)
+@param('data.output_directory')
+def construct_model(arch, output_directory):
 
     if arch == 'resnet':
         model = ResNet18()
-        # model.apply(resnet_weights_init)
     elif arch == 'vgg':
         model = VGG('VGG11')
     elif arch == 'mobilenet':
         model = MobileNetV2()
-        # model.apply(mobilenet_weights_init)
     elif arch == 'efficientnet':
         model = EfficientNetB0()
     elif arch == 'regnet':
         model = RegNetX_200MF()
     model = model.to(memory_format=ch.channels_last).cuda()
-
-    # if arch == 'resnet':
-    #     model.apply(resnet_weights_init)
-    # elif arch == 'mobilenet':
-        # model.apply(mobilenet_weights_init)
 
     # save initial model to view weights
     torch.save(model, f'{output_directory}/init_model.pt')
@@ -160,8 +140,11 @@ def construct_model(arch):
 @param('training.lr')
 @param('training.pnorm')
 @param('training.epochs')
+@param('checkpoint.from_checkpoint')
+@param('checkpoint.trial')
+@param('data.output_directory')
 def train(model, loaders, log_file = sys.stdout, lr=None, 
-        epochs=None, pnorm=None):
+        epochs=None, pnorm=None, from_checkpoint=False, trial=0, output_directory=None):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
     print("learning rate =", lr)
@@ -172,7 +155,16 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
 
     best_test_acc = 0
 
-    for epoch in tqdm(range(epochs)):
+    start_epoch = 0
+    if from_checkpoint:
+        checkpoint = torch.load(f'{output_directory}/checkpoint.pt')
+        model.load_state_dict(checkpoint['model_state_dict'])
+        opt.load_state_dict(checkpoint['optimizer_state_dict'])
+        scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        start_epoch = checkpoint['epoch']
+        print(f"Training from epoch {start_epoch+1}")
+
+    for epoch in tqdm(range(start_epoch, epochs)):
         total_correct = 0
         total_num = 0
 
@@ -198,6 +190,8 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
         #scheduler.step()
 
         if (epoch + 1) % 10 == 0:  
+            print(total_correct, total_num)
+
             print(f'Epoch {epoch+1} loss: {loss.item():.4f}', file = log_file)
             train_acc = evaluate(model, loaders, 'train')
             print(f'Epoch {epoch+1} train acc: {train_acc:.4f}', file = log_file)
@@ -208,13 +202,26 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
             if test_acc > best_test_acc:
                 print("Saving best model...", file=log_file)
                 best_test_acc = test_acc
-                torch.save(model, f'{output_directory}/best_model.pt')
+                torch.save(m,odel, f'{output_directory}/best_model.pt')
+        
+        if (epoch + 1) % 50 == 0:
+            print("Checkpointing...", file=log_file)
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': opt.state_dict(),
+                'scaler_state_dict': scaler.state_dict(),
+            }, f'{output_directory}/checkpoint.pt')
             
         if epoch + 1 >= 200:
             # train_acc = evaluate(model, loaders, 'train')
             if total_correct / total_num < 0.12:
                 print("Training is too slow. Quitting.", file=log_file)
                 break
+        
+        if total_correct == total_num:
+            print(f"Reached 0 training error. Ending training on epoch {epoch+1}.", file=log_file)
+            break
 
 def evaluate(model, loaders, name):
     model.eval()
