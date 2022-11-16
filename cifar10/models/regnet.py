@@ -79,6 +79,8 @@ class RegNet(nn.Module):
         self.layer4 = self._make_layer(3)
         self.linear = nn.Linear(self.cfg['widths'][-1], num_classes)
 
+        self._init_weight()
+
     def _make_layer(self, idx):
         depth = self.cfg['depths'][idx]
         width = self.cfg['widths'][idx]
@@ -94,6 +96,18 @@ class RegNet(nn.Module):
                                 s, group_width, bottleneck_ratio, se_ratio))
             self.in_planes = width
         return nn.Sequential(*layers)
+
+    def _init_weight(self):
+        print("custom weight initialization...")
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.normal_(0.0, 0.01)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.normal_(0.0, 0.01)
+                m.bias.data.fill_(0)
+            elif isinstance(m, nn.Linear):
+                m.weight.data.uniform_(-0.01, 0.01)
+                m.bias.data.uniform_(-0.1, 0.1)
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))

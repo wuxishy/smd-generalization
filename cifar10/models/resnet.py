@@ -96,19 +96,16 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def _init_weight(self):
+        print("initializing weights")
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                print(n)
-                m.weight.data.normal_(0, 2./math.sqrt(n))
-                if not m.bias is None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                m.weight.data.normal_(0, 0.01)
-                m.bias.data.zero_()
+                m.weight.data.normal_(0.0, 0.01)
             elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
+                m.weight.data.normal_(0.0, 0.01)
+                m.bias.data.fill_(0)
+            elif isinstance(m, nn.Linear):
+                m.weight.data.uniform_(-0.01, 0.01)
+                m.bias.data.uniform_(-0.1, 0.1)
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -147,4 +144,4 @@ def test():
     y = net(torch.randn(1, 3, 32, 32))
     print(y.size())
 
-test()
+# test()

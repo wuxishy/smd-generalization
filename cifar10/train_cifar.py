@@ -152,7 +152,9 @@ def construct_model(arch):
     #     model.apply(resnet_weights_init)
     # elif arch == 'mobilenet':
         # model.apply(mobilenet_weights_init)
-    
+
+    # save initial model to view weights
+    torch.save(model, f'{output_directory}/init_model.pt')
     return model
 
 @param('training.lr')
@@ -171,6 +173,9 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
     best_test_acc = 0
 
     for epoch in tqdm(range(epochs)):
+        total_correct = 0
+        total_num = 0
+
         model.train()
 
         for i, (ims, labs) in enumerate(loaders['train']):
@@ -182,6 +187,9 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
             with autocast():
                 out = model(ims)
                 loss = loss_fn(out, labs)
+
+                total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
+                total_num += ims.shape[0]
 
             scaler.scale(loss).backward()
             scaler.step(opt)
@@ -201,6 +209,12 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
                 print("Saving best model...", file=log_file)
                 best_test_acc = test_acc
                 torch.save(model, f'{output_directory}/best_model.pt')
+            
+        if epoch + 1 >= 200:
+            # train_acc = evaluate(model, loaders, 'train')
+            if total_correct / total_num < 0.12:
+                print("Training is too slow. Quitting.", file=log_file)
+                break
 
 def evaluate(model, loaders, name):
     model.eval()
@@ -213,6 +227,7 @@ def evaluate(model, loaders, name):
                 total_correct += out.argmax(1).eq(labs).sum().cpu().item() 
                 total_num += ims.shape[0]
 
+    # print(f"{total_correct} out of {total_num} correct", file=log_file)
     return total_correct / total_num
 
 def validation(model, loaders):

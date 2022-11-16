@@ -17,11 +17,25 @@ class VGG(nn.Module):
         self.features = self._make_layers(cfg[vgg_name])
         self.classifier = nn.Linear(512, 10)
 
+        self._init_weight()
+
     def forward(self, x):
         out = self.features(x)
         out = out.view(out.size(0), -1)
         out = self.classifier(out)
         return out
+
+    def _init_weight(self):
+        print("custom weight initialization...")
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.normal_(0.0, 0.01)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.normal_(0.0, 0.01)
+                m.bias.data.fill_(0)
+            elif isinstance(m, nn.Linear):
+                m.weight.data.uniform_(-0.01, 0.01)
+                m.bias.data.uniform_(-0.1, 0.1)
 
     def _make_layers(self, cfg):
         layers = []
