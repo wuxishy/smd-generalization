@@ -255,6 +255,9 @@ if __name__ == "__main__":
     config.validate(mode='stderr')
     config.summary()
 
+    if config['checkpoint.from_checkpoint']:
+        os.environ["OUTPUT"] = "$GROUP/smd-experiment/cifar10_fixed-lr-long-run/" + config['checkpoint.trial']
+
     output_directory = os.path.expandvars(config['data.output_directory'])
     os.makedirs(output_directory, exist_ok = True)
 
