@@ -186,8 +186,6 @@ def train(model, loaders, output_directory, log_file = sys.stdout, lr=None,
         #scheduler.step()
 
         if (epoch + 1) % 10 == 0:  
-            print(total_correct, total_num)
-
             print(f'Epoch {epoch+1} loss: {loss.item():.4f}', file = log_file)
             train_acc = evaluate(model, loaders, 'train')
             print(f'Epoch {epoch+1} train acc: {train_acc:.4f}', file = log_file)
@@ -202,6 +200,7 @@ def train(model, loaders, output_directory, log_file = sys.stdout, lr=None,
         
         if (epoch + 1) % 25 == 0:
             print("Checkpointing...", file=log_file)
+            print(f"{total_correct} correct out of {total_num}", file=log_file)
             torch.save({
                 'epoch': epoch + 1,
                 'model_state_dict': model.state_dict(),
