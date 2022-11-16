@@ -118,9 +118,7 @@ def make_dataloaders(train_dataset=None, test_dataset=None,
     return loaders, start_time
 
 @param('training.arch')
-@param('data.output_directory')
-def construct_model(arch, output_directory):
-
+def construct_model(output_directory, arch=None):
     if arch == 'resnet':
         model = ResNet18()
     elif arch == 'vgg':
@@ -133,8 +131,6 @@ def construct_model(arch, output_directory):
         model = RegNetX_200MF()
     model = model.to(memory_format=ch.channels_last).cuda()
 
-    # save initial model to view weights
-    torch.save(model, f'{output_directory}/init_model.pt')
     return model
 
 @param('training.lr')
@@ -142,9 +138,8 @@ def construct_model(arch, output_directory):
 @param('training.epochs')
 @param('checkpoint.from_checkpoint')
 @param('checkpoint.trial')
-@param('data.output_directory')
-def train(model, loaders, log_file = sys.stdout, lr=None, 
-        epochs=None, pnorm=None, from_checkpoint=False, trial=0, output_directory=None):
+def train(model, loaders, output_directory, log_file = sys.stdout, lr=None, 
+        epochs=None, pnorm=None, from_checkpoint=False, trial=0):
     #opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     #opt = Adam(model.parameters(), lr=lr)
     print("learning rate =", lr)
@@ -162,7 +157,8 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
         opt.load_state_dict(checkpoint['optimizer_state_dict'])
         scaler.load_state_dict(checkpoint['scaler_state_dict'])
         start_epoch = checkpoint['epoch']
-        print(f"Training from epoch {start_epoch+1}")
+        best_test_acc = checkpoint['best_test_acc']
+        print(f"Training from epoch {start_epoch+1}; current best test acc = {best_test_acc}", file=log_file)
 
     for epoch in tqdm(range(start_epoch, epochs)):
         total_correct = 0
@@ -202,15 +198,16 @@ def train(model, loaders, log_file = sys.stdout, lr=None,
             if test_acc > best_test_acc:
                 print("Saving best model...", file=log_file)
                 best_test_acc = test_acc
-                torch.save(m,odel, f'{output_directory}/best_model.pt')
+                torch.save(model, f'{output_directory}/best_model.pt')
         
-        if (epoch + 1) % 50 == 0:
+        if (epoch + 1) == 1:
             print("Checkpointing...", file=log_file)
             torch.save({
                 'epoch': epoch + 1,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': opt.state_dict(),
                 'scaler_state_dict': scaler.state_dict(),
+                'best_test_acc': best_test_acc,
             }, f'{output_directory}/checkpoint.pt')
             
         if epoch + 1 >= 200:
@@ -247,6 +244,9 @@ def validation(model, loaders):
     return accuracies
 
 if __name__ == "__main__":
+    if torch.cuda.is_available():
+        print("cuda enabled!")
+
     config = get_current_config()
     parser = ArgumentParser(description='Fast CIFAR-10 training')
     config.augment_argparse(parser)
@@ -256,15 +256,27 @@ if __name__ == "__main__":
     config.summary()
 
     if config['checkpoint.from_checkpoint']:
-        os.environ["OUTPUT"] = "$GROUP/smd-experiment/cifar10_fixed-lr-long-run/" + config['checkpoint.trial']
-
+        print("checkpointing!")
+        os.environ["OUTPUT"] = "$GROUP/smd-experiment/cifar10_fixed-lr-long-run/" + str(config['checkpoint.trial'])
+    
     output_directory = os.path.expandvars(config['data.output_directory'])
-    os.makedirs(output_directory, exist_ok = True)
+    print(output_directory)
+    output_directory = os.path.expandvars(output_directory)
+    print(output_directory)
+
+    if not config['checkpoint.from_checkpoint']:
+        print("new training!")
+        os.makedirs(output_directory, exist_ok = True)
 
     loaders, start_time = make_dataloaders()
-    model = construct_model()
-    with open(f'{output_directory}/log.txt', 'w') as log_file:
-        train(model, loaders, log_file)
+    model = construct_model(output_directory)
+    # save initial model so we can view weights later
+    if not config['checkpoint.from_checkpoint']:
+        torch.save(model, f'{output_directory}/init_model.pt')
+
+    with open(f'{output_directory}/log.txt', 'a') as log_file:
+        log_file.write('\n')
+        train(model, loaders, output_directory, log_file)
 
     accuracies = validation(model, loaders)
     acc_file = f'{output_directory}/accuracy.yaml'
